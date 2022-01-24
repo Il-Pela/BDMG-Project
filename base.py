@@ -512,7 +512,10 @@ class BaseDfBench(object):
         :param how type of join (inner, left, right, outer)
         :param kwargs extra parameters
         """
-        pass
+        
+        self.df = self.df.merge(other, left_on=left_on, right_on=right_on, how=how, **kwargs)
+        
+        return self.df
 
     def groupby(self, columns, f):
         """
@@ -521,7 +524,8 @@ class BaseDfBench(object):
         :param columns columns to use for group by
         :param f aggregation function
         """
-        pass
+        
+        return self.df.groupby(columns).agg(f)
 
     def categorical_encoding(self, columns):
         """
@@ -530,7 +534,12 @@ class BaseDfBench(object):
         Columns is a list of column names
         :param columns columns to encode
         """
-        pass
+        
+        for column in columns:
+            self.df[column] = self.df[column].astype('category')
+            self.df[column] = self.df[column].cat.codes
+        
+        return self.df
 
     def sample_rows(self, frac, num):
         """
@@ -541,7 +550,11 @@ class BaseDfBench(object):
         :param frac percentage or exact number of samples to take
         :param num if set to True uses frac as a percentage, otherwise frac is used as a number
         """
-        pass
+        
+        if frac:
+            return self.df.sample(frac=num/100)
+        else:
+            return self.df.sample(n=num)
 
     def append(self, other, ignore_index):
         """
@@ -551,7 +564,10 @@ class BaseDfBench(object):
         :param other other dataframe to append
         :param ignore_index if set to True reset row indices
         """
-        pass
+        
+        self.df = self.df.append(other, ignore_index=ignore_index)
+        
+        return self.df
 
     def replace(self, columns, to_replace, value, regex):
         """
@@ -564,7 +580,10 @@ class BaseDfBench(object):
         :param value value to replace with
         :param regex if True means that to_replace is a regex
         """
-        pass
+        
+        self.df[columns] = self.df[columns].replace(to_replace=to_replace, value=value, regex=regex)
+        
+        return self.df
 
     def edit(self, columns, func):
         """
@@ -573,7 +592,10 @@ class BaseDfBench(object):
         :param columns columns on which apply this method
         :param func function to apply
         """
-        pass
+        
+        self.df[columns] = self.df[columns].apply(func)
+        
+        return self.df
 
     def set_value(self, index, column, value):
         """
@@ -582,7 +604,10 @@ class BaseDfBench(object):
         :param column column name
         :param value value to set
         """
-        pass
+        
+        self.df.at[index, column] = value
+        
+        return self.df
 
     def min_max_scaling(self, columns, min, max):
         """
@@ -592,7 +617,13 @@ class BaseDfBench(object):
         :param min min value
         :param max max value
         """
-        pass
+        
+        for column in columns:
+            self.df[column] = self.df[column] - self.df[column].min()
+            self.df[column] = self.df[column] / self.df[column].max()
+            self.df[column] = self.df[column] * (max - min) + min
+        
+        return self.df
 
     def round(self, columns, n):
         """
@@ -601,14 +632,19 @@ class BaseDfBench(object):
         :param columns columns on which apply this method
         :param n decimal places
         """
-        pass
+        self.df[columns] = self.df[columns].round(n)
+        
+        return self.df
 
     def get_duplicate_columns(self):
         """
         Return a list of duplicate columns, if exists.
         Duplicate columns are those which have same values for each row.
         """
-        pass
+        
+        cols = self.df.columns.values
+        
+        return [(cols[i], cols[j]) for i in range(0, len(cols)) for j in range(i+1, len(cols)) if self.df[cols[i]].equals(self.df[cols[j]])]
 
     def to_csv(self, path, **kwargs):
         """
@@ -616,6 +652,9 @@ class BaseDfBench(object):
         :param path path on which store the csv
         :param kwargs extra parameters
         """
+        
+        self.df.to_csv(path, **kwargs)
+
         pass
 
     def query(self, query):
@@ -625,4 +664,5 @@ class BaseDfBench(object):
         :param query: a string with the query conditions, e.g. "col1 > 1 & col2 < 10"
         :return: subset of the dataframe that correspond to the selection conditions
         """
-        pass
+        
+        return self.df.query(query)
