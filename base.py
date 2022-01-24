@@ -1,4 +1,5 @@
 import psutil
+import cudf
 
 
 class BaseDfBench(object):
@@ -22,7 +23,7 @@ class BaseDfBench(object):
         # return in kB for backwards compatibility
         return psutil.Process().memory_info().rss / 1024
 
-    def load_dataset(self, path, format, **kwargs):
+    def load_dataset(self, path, format, conn=None, **kwargs):
         """
         Load the provided dataframe
         :param path: path of the file to load
@@ -30,14 +31,20 @@ class BaseDfBench(object):
         :param kwargs: extra arguments
         :return:
         """
-        pass
 
-    def read_json(self, path, **kwargs):
-        """
-        :param path: path of the file to load
-        :param kwargs: extra arguments
-        Read a json file
-        """
+        if format == "csv":
+            self.df = self.read_csv(path, **kwargs)
+        elif format == "json":
+            self.df = self.read_json(path, **kwargs)
+        elif format == "xml":
+            self.df = self.read_xml(path, **kwargs)
+        elif format == "excel":
+            self.df = self.read_excel(path, **kwargs)
+        elif format == "parquet":
+            self.df = self.read_parquet(path, **kwargs)
+        elif format == "sql":
+            self.df = self.read_sql(path, conn, **kwargs)
+
         pass
 
     def read_csv(self, path, **kwargs):
@@ -46,6 +53,19 @@ class BaseDfBench(object):
         :param path: path of the file to load
         :param kwargs: extra arguments
         """
+
+        self.df = cudf.read_csv(path, **kwargs)
+
+        return self.df
+
+    def read_json(self, path, **kwargs):
+        """
+        :param path: path of the file to load
+        :param kwargs: extra arguments
+        Read a json file
+        """
+
+        self.df = cudf.read_json(path, **kwargs)
         pass
 
     def read_xml(self, path, **kwargs):
@@ -54,7 +74,18 @@ class BaseDfBench(object):
         :param path: path of the file to load
         :param kwargs: extra arguments
         """
-        pass
+        import xmltodict, json
+
+        with open(path) as xml_file:
+            data_dict = xmltodict.parse(xml_file.read())
+        
+        xml_file.close()
+
+        json_data = json.dumps(data_dict)
+
+        self.df = self.read_json(json_data)
+
+        return self.df
 
     def read_excel(self, path, **kwargs):
         """
@@ -88,20 +119,25 @@ class BaseDfBench(object):
         :param columns columns to use for sorting
         :param ascending if sets to False sorts in descending order (default True)
         """
-        pass
+
+        self.df = self.df.sort_values(columns, ascending=ascending)
+        
+        return self.df
 
     def get_columns(self):
         """
         Return a list containing the names of the columns in the dataframe
         """
-        pass
+        
+        return list(self.df.columns.values)
 
     def is_unique(self, column):
         """
         Check the uniqueness of all values contained in the provided column_name
         :param column column to check
         """
-        pass
+        
+        return self.df[column].is_unique
 
     def delete_columns(self, columns):
         """
@@ -109,7 +145,10 @@ class BaseDfBench(object):
         Columns is a list of column names
         :param columns columns to delete
         """
-        pass
+        
+        self.df = self.df.drop(columns=columns)
+
+        return self.df
 
     def rename_columns(self, columns):
         """
@@ -117,7 +156,10 @@ class BaseDfBench(object):
         Columns is a dictionary: {"column_name": "new_name"}
         :param columns a dictionary that contains for each column to rename the new name
         """
-        pass
+        
+        self.df = self.df.rename(columns=columns)
+
+        return self.df
 
     def merge_columns(self, columns, separator, name):
         """
@@ -127,14 +169,20 @@ class BaseDfBench(object):
         :param separator separator to use
         :param name new column name
         """
-        pass
+
+        self.df[name] = self.df[columns[0]].astype(str) + separator + self.df[columns[1]].astype(str)
+
+        return self.df
 
     def fill_nan(self, value):
         """
         Fill nan values in the dataframe with the provided value
         :param value value to use for replacing null values
         """
-        pass
+        
+        self.df = self.df.fillna(value)
+        
+        return self.df
 
     def one_hot_encoding(self, columns):
         """
@@ -142,7 +190,11 @@ class BaseDfBench(object):
         Columns is a list of column names
         :param columns columns to encode
         """
-        pass
+
+        dummies = cudf.get_dummies(self.df[columns])
+        self.df = cudf.concat([self.df.drop(columns=columns), dummies], axis=1)
+
+        return self.df
 
     def locate_null_values(self, column):
         """
@@ -150,7 +202,8 @@ class BaseDfBench(object):
         null value in the provided column.
         :param column column to explore
         """
-        pass
+        
+        return self.df[self.df[column].isna()]
 
     def search_by_pattern(self, column, pattern):
         """
@@ -161,7 +214,9 @@ class BaseDfBench(object):
         :param column column to search on
         :param pattern pattern to search, string or regex
         """
-        pass
+        import re
+
+        return self.df[self.df[column].str.contains(re.compile(pattern))]
 
     def locate_outliers(self, column, lower_quantile=0.1, upper_quantile=0.99):
         """
@@ -172,13 +227,17 @@ class BaseDfBench(object):
         :param lower_quantile lower quantile (default 0.1)
         :param upper_quantile upper quantile (default 0.99)
         """
-        pass
+        q_low = self.df[column].quantile(lower_quantile)
+        q_hi  = self.df[column].quantile(upper_quantile)
+
+        return self.df[(self.df[column] < q_low) | (self.df[column] > q_hi)]
 
     def get_columns_types(self):
         """
         Returns a dictionary with column types
         """
-        pass
+        
+        return self.df.dtypes.apply(lambda x: x.name).to_dict()
 
     def cast_columns_types(self, dtypes):
         """
@@ -189,7 +248,10 @@ class BaseDfBench(object):
         :param dtypes a dictionary that provides for ech column to cast the new datatype
                For example  {'col_name': 'int8'}
         """
-        pass
+
+        self.df = self.df.astype(dtypes)
+
+        return self.df
 
     def get_stats(self):
         """
@@ -197,7 +259,8 @@ class BaseDfBench(object):
         Only for numeric columns.
         Min value, max value, average value, standard deviation, and standard quantiles.
         """
-        pass
+        
+        return self.df.describe()
 
     def find_mismatched_dtypes(self):
         """
@@ -208,7 +271,16 @@ class BaseDfBench(object):
          - current_dtype: current data type
          - suggested_dtype: suggested data type
         """
-        pass
+        
+        current_dtypes = self.get_columns_types()
+        new_dtypes = self.df.apply(cudf.to_numeric, errors='ignore').dtypes.apply(lambda x: x.name).to_dict()
+
+        out = []
+        for k in current_dtypes.keys():
+            if new_dtypes[k] != current_dtypes[k]:
+                out.append({'col': k, 'current_dtype': current_dtypes[k], 'suggested_dtype': new_dtypes[k]})
+        
+        return out
 
     def check_allowed_char(self, column, pattern):
         """
@@ -219,13 +291,29 @@ class BaseDfBench(object):
         :param column column to check
         :param pattern pattern to use
         """
-        pass
+        import re
+
+        return self.df[column].str.contains(re.compile(pattern)).all()
 
     def drop_duplicates(self):
         """
         Drop duplicate rows.
         """
-        pass
+        
+        self.df = self.df.drop_duplicates()
+
+        return self.df
+
+    def drop_by_pattern(self, column, pattern):
+        """
+        Delete the rows where the provided pattern
+        occurs in the provided column.
+        """
+
+        matching_rows = self.search_by_pattern(column, pattern)
+        self.df = self.df.drop(matching_rows.index)
+
+        return self.df
 
     def change_date_time_format(self, column, str_date_time_format):
         """
@@ -236,7 +324,10 @@ class BaseDfBench(object):
         :param column column to format
         :param str_date_time_format datetime formatting string
         """
-        pass
+        
+        self.df[column] = cudf.to_datetime(self.df[column].dt.strftime(str_date_time_format))
+        
+        return self.df
 
     def set_header_case(self, case):
         """
@@ -244,7 +335,19 @@ class BaseDfBench(object):
         Supported cases: "lower", "upper", "title", "capitalize", "swapcase"
         :param case case format (lower, upper, title, capitalize, swapcase)
         """
-        pass
+       
+        if case == "lower":
+            self.df.columns = map(str.lower, self.df.columns)
+        elif case == "upper":
+            self.df.columns = map(str.upper, self.df.columns)
+        elif case == "title":
+            self.df.columns = map(str.title, self.df.columns)
+        elif case == "capitalize":
+            self.df.columns = map(str.capitalize, self.df.columns)
+        elif case == "swapcase":
+            self.df.columns = map(str.swapcase, self.df.columns)
+
+        return self.df
 
     def set_content_case(self, columns, case):
         """
@@ -255,7 +358,22 @@ class BaseDfBench(object):
         :param columns columns to modify
         :param case case format (lower, upper, title, capitalize, swapcase)
         """
-        pass
+        
+        if len(columns) == 0:
+            columns = list(self.df.columns.values)
+        for column in columns:
+            if case == "lower":
+                self.df[column] = self.df[column].str.lower()
+            elif case == "upper":
+                self.df[column] = self.df[column].str.upper()
+            elif case == "title":
+                self.df[column] = self.df[column].str.title()
+            elif case == "capitalize":
+                self.df[column] = self.df[column].str.capitalize()
+            elif case == "swapcase":
+                self.df[column] = self.df[column].str.swapcase()
+
+        return self.df
 
     def duplicate_columns(self, columns):
         """
@@ -263,8 +381,13 @@ class BaseDfBench(object):
         Columns is a list of column names
         :param columns columns to duplicate
         """
-        pass
+        
+        for column in columns:
+            self.df[column + "_duplicate"] = self.df[column]
+        
+        return self.df
 
+    #FIXME QUESTA VA CONTROLLATA!!! Applicare la aggfunc così non è legale per Rapids
     def pivot(self, index, columns, values, aggfunc):
         """
         Define the lists of columns to be used as index, columns and values respectively,
@@ -275,14 +398,21 @@ class BaseDfBench(object):
         :param aggfunc dictionary to aggregate ("sum", "mean", "count") the values for each column
                {"col1": "sum"}
         """
-        pass
+        
+        self.df = self.df.pivot(index=index, values=values, columns=columns, aggfunc=aggfunc).reset_index()
+        
+        return self.df
 
+    #FIXME ANCHE QUESTA VA CONTROLLATA
     def unpivot(self, columns, var_name, val_name):
         """
         Define the list of columns to be used as values for the variable column,
         the name for variable columns and the one for value column_name
         """
-        pass
+        
+        self.df = self.df.melt(id_vars=list(set(list(self.df.columns.values)) - set(columns)), value_vars=columns, var_name=var_name, value_name=val_name)
+        
+        return self.df
 
     def delete_empty_rows(self, columns):
         """
@@ -290,7 +420,10 @@ class BaseDfBench(object):
         Columns is a list of column names
         :param columns columns to check
         """
-        pass
+        
+        self.df = self.df.dropna(subset = columns, inplace=True)
+        
+        return self.df
 
     def split(self, column, sep, splits, col_names):
         """
@@ -302,7 +435,10 @@ class BaseDfBench(object):
         :param splits number of splits, limit the number of splits
         :param col_names name of the new columns
         """
-        pass
+        
+        self.df[col_names] = self.df[column].str.split(sep, splits, expand=True)
+        
+        return self.df
 
     def strip(self, columns, chars):
         """
@@ -311,7 +447,11 @@ class BaseDfBench(object):
         :param columns columns to edit
         :param chars characters to remove
         """
-        pass
+        
+        for column in columns:
+            self.df[column] = self.df[column].str.strip(chars)
+
+        return self.df
 
     def remove_diacritics(self, columns):
         """
@@ -319,14 +459,21 @@ class BaseDfBench(object):
         Columns is a list of column names
         :param columns columns to edit
         """
-        pass
+        
+        for column in columns:
+            self.df[column] = self.df[column].str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
+        
+        return self.df
 
     def set_index(self, column):
         """
         Set the provided column as index
         :param column to use as index
         """
-        pass
+        
+        self.df = self.df.set_index(column)
+        
+        return self.df
 
     def change_num_format(self, formats):
         """
@@ -335,7 +482,10 @@ class BaseDfBench(object):
         :param formats new column(s) format(s).
                E.g. {'col_name' : 2}
         """
-        pass
+        
+        self.df = self.df.round(formats)
+        
+        return self.df
 
     def calc_column(self, col_name, f):
         """
@@ -344,7 +494,10 @@ class BaseDfBench(object):
         :param col_name column on which apply the function
         :param f function to apply
         """
-        pass
+        
+        self.df[col_name] = self.df.apply(f, axis=1)
+        
+        return self.df
 
     def join(self, other, left_on=None, right_on=None, how='inner', **kwargs):
         """
