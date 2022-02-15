@@ -3,6 +3,9 @@ import cudf
 
 
 class BaseDfBench(object):
+    def __init__(self):
+        self.df = cudf.DataFrame()
+    
     def get_df(self):
         """
         Returns the internal dataframe
@@ -45,7 +48,7 @@ class BaseDfBench(object):
         elif format == "sql":
             self.df = self.read_sql(path, conn, **kwargs)
 
-        pass
+        return self.df
 
     def read_csv(self, path, **kwargs):
         """
@@ -111,6 +114,7 @@ class BaseDfBench(object):
         :param conn connection to a database
         :param kwargs: extra arguments
         """
+        pass
 
     def sort(self, columns, ascending=True):
         """
