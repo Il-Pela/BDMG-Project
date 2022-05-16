@@ -5,7 +5,7 @@ import dask_cudf as dc
 
 class BaseDfBench(object):
     def __init__(self):
-        self.df = cudf.DataFrame()
+        self.df = dc.read_csv('/data/invoices.csv', blocksize="256MB")
     
     def get_df(self):
         """
@@ -27,6 +27,7 @@ class BaseDfBench(object):
         # return in kB for backwards compatibility
         return psutil.Process().memory_info().rss / 1024
 
+    '''
     def load_dataset(self, path, format, conn=None, **kwargs):
         """
         Load the provided dataframe
@@ -116,16 +117,15 @@ class BaseDfBench(object):
         :param kwargs: extra arguments
         """
         pass
-
-    def sort(self, columns, ascending=True):
+    '''
+    def sort(self, column : string, ascending=True : bool):
         """
-        Sort the dataframe by the provided columns
-        Columns is a list of column names
-        :param columns columns to use for sorting
+        Sort the dataframe by the provided column
+        :param column column to use for sorting
         :param ascending if sets to False sorts in descending order (default True)
         """
 
-        self.df = self.df.sort_values(columns, ascending=ascending)
+        self.df = self.df.sort_values(column, ascending=ascending)
         
         return self.df
 
