@@ -1,11 +1,18 @@
 import psutil
-import cudf
 import dask_cudf as dc
+import dask.dataframe as dd
+from dask_cuda import LocalCUDACluster
+from dask.distributed import Client
+import cudf
+import graphviz
 
 
 class BaseDfBench(object):
-    def __init__(self):
-        self.df = dc.read_csv('/data/invoices.csv', blocksize="256MB")
+    def __init__(self, file_path='/data/invoices.csv'):
+        cluster = LocalCUDACluster()
+        client = Client(cluster)
+        client.run(cudf.set_allocator, "managed")
+        self.df = dc.read_csv(file_path, blocksize="1GB")
     
     def get_df(self):
         """
@@ -118,7 +125,7 @@ class BaseDfBench(object):
         """
         pass
     '''
-    def sort(self, column : string, ascending=True : bool):
+    def sort(self, column, ascending=True):
         """
         Sort the dataframe by the provided column
         :param column column to use for sorting
@@ -142,7 +149,7 @@ class BaseDfBench(object):
         :param column column to check
         """
         
-        return self.df[column].is_unique
+        return (a[column].unique().shape[0] == a[column].shape[0]).compute()
 
     def delete_columns(self, columns):
         """
@@ -165,7 +172,7 @@ class BaseDfBench(object):
         self.df = self.df.rename(columns=columns)
 
         return self.df
-
+    
     def merge_columns(self, columns, separator, name):
         """
         Create a new column with the provided name combining the two provided columns using the provided separator
@@ -179,26 +186,35 @@ class BaseDfBench(object):
 
         return self.df
 
-    def fill_nan(self, value):
+    def fill_nan(self, value=0, method=None):
         """
         Fill nan values in the dataframe with the provided value
         :param value value to use for replacing null values
+        :param method method to fill the nan value, can be ffill, bfill, pad, backfill or None. Default None
         """
         
-        self.df = self.df.fillna(value)
+        self.df = self.df.fillna(value, method=method)
         
         return self.df
+    
+    def npartitions(self):
+        """
+        Return the number of partitions
+        """
+        return self.df.npartitions
 
     def one_hot_encoding(self, columns):
         """
         Performs one-hot encoding of the provided columns
         Columns is a list of column names
         :param columns columns to encode
+        
+        !!This function throw a Warning about unknown partitions but before concatenate the columns i explicitly check the number of partitions!!
         """
 
-        dummies = cudf.get_dummies(self.df[columns])
-        self.df = cudf.concat([self.df.drop(columns=columns), dummies], axis=1)
-
+        dummies = dd.get_dummies(self.df.categorize(columns)[columns]).repartition(npartitions=self.df.npartitions)
+        self.df = self.df.repartition(npartitions=self.df.npartitions)
+        self.df = dd.multi.concat([self.df.drop(columns=columns), dummies], axis=1)
         return self.df
 
     def locate_null_values(self, column):
@@ -209,7 +225,7 @@ class BaseDfBench(object):
         """
         
         return self.df[self.df[column].isna()]
-
+######################################################################
     def search_by_pattern(self, column, pattern):
         """
         Returns the rows of the dataframe which
