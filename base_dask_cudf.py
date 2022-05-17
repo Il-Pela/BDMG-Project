@@ -8,11 +8,11 @@ import graphviz
 
 
 class BaseDfBench(object):
-    def __init__(self, file_path='/data/invoices.csv'):
+    def __init__(self, file_path='/data/parquet'):
         cluster = LocalCUDACluster()
         client = Client(cluster)
         client.run(cudf.set_allocator, "managed")
-        self.df = dc.read_csv(file_path, blocksize="1GB")
+        self.df = dc.read_parquet(file_path, blocksize="1GB")
     
     def get_df(self):
         """
@@ -225,6 +225,19 @@ class BaseDfBench(object):
         """
         
         return self.df[self.df[column].isna()]
+
+    def substitute_by_pattern(self, column, pattern, sub):
+        """
+        Returns the rows of the dataframe which
+        match with the provided pattern
+        on the provided column.
+        Pattern could be a regular expression.
+        :param column column to search on
+        :param pattern pattern to search, string or regex
+        """
+        self.df[column] = self.df[column].map_partitions(lambda d: d.str.replace(pattern, sub, regex=True))
+
+        return self.df
 ######################################################################
     def search_by_pattern(self, column, pattern):
         """
