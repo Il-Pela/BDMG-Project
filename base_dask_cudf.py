@@ -238,7 +238,7 @@ class BaseDfBench(object):
         self.df[column] = self.df[column].map_partitions(lambda d: d.str.replace(pattern, sub, regex=True))
 
         return self.df
-######################################################################
+
     def search_by_pattern(self, column, pattern):
         """
         Returns the rows of the dataframe which
@@ -248,9 +248,7 @@ class BaseDfBench(object):
         :param column column to search on
         :param pattern pattern to search, string or regex
         """
-        import re
-
-        return self.df[self.df[column].str.contains(re.compile(pattern))]
+        return self.df[column].map_partitions(lambda d: d.str.contains(pattern, regex=True))
 
     def locate_outliers(self, column, lower_quantile=0.1, upper_quantile=0.99):
         """
@@ -271,7 +269,7 @@ class BaseDfBench(object):
         Returns a dictionary with column types
         """
         
-        return self.df.dtypes.apply(lambda x: x.name).to_dict()
+        return {k: v.name for k, v in dict(self.df.dtypes).items()}
 
     def cast_columns_types(self, dtypes):
         """
@@ -286,7 +284,7 @@ class BaseDfBench(object):
         self.df = self.df.astype(dtypes)
 
         return self.df
-
+######################################################################
     def get_stats(self):
         """
         Returns dataframe statistics.
