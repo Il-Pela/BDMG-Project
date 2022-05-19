@@ -12,7 +12,7 @@ class BaseDfBench(object):
         cluster = LocalCUDACluster()
         client = Client(cluster)
         client.run(cudf.set_allocator, "managed")
-        self.df = dc.read_parquet(file_path, blocksize="1GB")
+        self.df = dc.read_parquet(file_path, blocksize="256MB")
     
     def get_df(self):
         """
@@ -284,7 +284,7 @@ class BaseDfBench(object):
         self.df = self.df.astype(dtypes)
 
         return self.df
-######################################################################
+
     def get_stats(self):
         """
         Returns dataframe statistics.
@@ -294,6 +294,8 @@ class BaseDfBench(object):
         
         return self.df.describe()
 
+    #TODO
+    #ma mi sa da cambiare proprio, purtroppo cudf non ha Dataframe.to_numeric() ma ha solo cudf.to_numeric, il ché rende impossibile la conversione per questioni di file meta
     def find_mismatched_dtypes(self):
         """
         Returns, if exists, a list of columns with mismatched data types.
@@ -305,7 +307,7 @@ class BaseDfBench(object):
         """
         
         current_dtypes = self.get_columns_types()
-        new_dtypes = self.df.apply(cudf.to_numeric, errors='ignore').dtypes.apply(lambda x: x.name).to_dict()
+        #new_dtypes = self.df.(cudf.to_numeric, errors='ignore', axis=1, meta=self.df).dtypes.apply(lambda x: x.name).to_dict()
 
         out = []
         for k in current_dtypes.keys():
@@ -325,14 +327,16 @@ class BaseDfBench(object):
         """
         import re
 
-        return self.df[column].str.contains(re.compile(pattern)).all()
+        return self.df[column].str.contains(pattern, regex=True).all()
 
-    def drop_duplicates(self):
+    def drop_duplicates(self, subset=[]):
         """
         Drop duplicate rows.
         """
-        
-        self.df = self.df.drop_duplicates()
+        if subset == []:
+            self.df = self.df.drop_duplicates()
+        else:
+            self.df = self.df.drop_duplicates(subset=subset)
 
         return self.df
 
@@ -341,12 +345,13 @@ class BaseDfBench(object):
         Delete the rows where the provided pattern
         occurs in the provided column.
         """
-
-        matching_rows = self.search_by_pattern(column, pattern)
-        self.df = self.df.drop(matching_rows.index)
+        
+        self.df = self.df[self.df.search_by_pattern(column, pattern)]
 
         return self.df
 
+    #TODO
+    #PRIMA DI FARE QUESTO SERVE IL CONVERTER DELLA STRNGA SCRITTA IN ITA IN DATA
     def change_date_time_format(self, column, str_date_time_format):
         """
         Change the date/time format of the provided column
@@ -452,12 +457,11 @@ class BaseDfBench(object):
         Columns is a list of column names
         :param columns columns to check
         """
-        
-        self.df = self.df.dropna(subset = columns, inplace=True)
+        self.df = self.df.dropna(subset = columns, how='all')
         
         return self.df
 
-    def split(self, column, sep, splits, col_names):
+    def split(self, column, splits, sep=None):
         """
         Split the provided column into splits + 1 columns named after col_names
         using the provided sep string as separator
@@ -468,9 +472,7 @@ class BaseDfBench(object):
         :param col_names name of the new columns
         """
         
-        self.df[col_names] = self.df[column].str.split(sep, splits, expand=True)
-        
-        return self.df
+        return self.df[column].str.split(sep, splits, expand=True)
 
     def strip(self, columns, chars):
         """
@@ -493,7 +495,7 @@ class BaseDfBench(object):
         """
         
         for column in columns:
-            self.df[column] = self.df[column].str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
+            self.df[column] = self.df[column].str.normalize_characters('NFKD')
         
         return self.df
 
@@ -525,6 +527,8 @@ class BaseDfBench(object):
         the function f.
         :param col_name column on which apply the function
         :param f function to apply
+        
+        EXAMPLE: df.calc_column('BBBBBBBBBBBB', lambda x: x['gas_transport_cost']+99).tail()
         """
         
         self.df[col_name] = self.df.apply(f, axis=1)
@@ -566,15 +570,15 @@ class BaseDfBench(object):
         Columns is a list of column names
         :param columns columns to encode
         """
-        
+        self.df = self.df.categorize(columns=columns)
         for column in columns:
-            self.df[column] = self.df[column].astype('category')
             self.df[column] = self.df[column].cat.codes
         
         return self.df
 
-    def sample_rows(self, frac, num):
+    def sample_rows(self, num=0.01):
         """
+        NB. DASK NON SUPPORTA UN NUMERO PREDEFINITO DI RIGHE MA SOLAMENTE UNA FRAZIONE
         Return a sample of the rows of the dataframe
         Frac is a boolean:
         - if true, num is the percentage of rows to be returned
@@ -583,12 +587,10 @@ class BaseDfBench(object):
         :param num if set to True uses frac as a percentage, otherwise frac is used as a number
         """
         
-        if frac:
-            return self.df.sample(frac=num/100)
-        else:
-            return self.df.sample(n=num)
+        assert 0 <= num <= 1, 'num MUST BE between 0 and 1'
+        return self.df.sample(frac=num)
 
-    def append(self, other, ignore_index):
+    def append(self, other, axis=0):
         """
         Append the rows of another dataframe (other) at the end of the provided dataframe
         All columns are kept, eventually filled by nan
@@ -597,10 +599,10 @@ class BaseDfBench(object):
         :param ignore_index if set to True reset row indices
         """
         
-        self.df = self.df.append(other, ignore_index=ignore_index)
+        self.df = dd.multi.concat([self.df, other], axis=axis)
         
         return self.df
-
+######################################################################
     def replace(self, columns, to_replace, value, regex):
         """
         Replace all occurrences of to_replace (numeric, string, regex, list, dict) in the provided columns using the
