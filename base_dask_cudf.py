@@ -1,6 +1,7 @@
 import psutil
 import dask_cudf as dc
 import dask.dataframe as dd
+import dask.array as da
 from dask_cuda import LocalCUDACluster
 from dask.distributed import Client
 import cudf
@@ -602,9 +603,10 @@ class BaseDfBench(object):
         self.df = dd.multi.concat([self.df, other], axis=axis)
         
         return self.df
-######################################################################
-    def replace(self, columns, to_replace, value, regex):
+
+    def replace(self, columns, to_replace, value, regex=False):
         """
+        NB. PURTROPPO REPLACE CON LE REGEX IN CUDF NON è IMPLEMENTATO QUINDI BISOGNA ANDARE DI MAP PARTITION UTILIZZANDO UNA FUNZIONE CUDF PER LE SERIES PER QUESTO LA VERSIONE REGEX è IN UN FOR
         Replace all occurrences of to_replace (numeric, string, regex, list, dict) in the provided columns using the
         provided value
         Regex is a boolean: if true, to_replace is interpreted as a regex
@@ -614,11 +616,14 @@ class BaseDfBench(object):
         :param value value to replace with
         :param regex if True means that to_replace is a regex
         """
-        
-        self.df[columns] = self.df[columns].replace(to_replace=to_replace, value=value, regex=regex)
+        if regex == False:
+            self.df[columns] = self.df[columns].replace(to_replace=to_replace, value=value, regex=regex)
+        else:
+            for col in columns:
+                self.substitute_by_pattern(col, to_replace, value)
         
         return self.df
-
+    #TOTEST TODO
     def edit(self, columns, func):
         """
         Edit the values of the cells in the provided columns using the provided expression
@@ -630,7 +635,7 @@ class BaseDfBench(object):
         self.df[columns] = self.df[columns].apply(func)
         
         return self.df
-
+    #TOTEST TODO
     def set_value(self, index, column, value):
         """
         Set the cell identified by index and column to the provided value
@@ -643,7 +648,7 @@ class BaseDfBench(object):
         
         return self.df
 
-    def min_max_scaling(self, columns, min, max):
+    def min_max_scaling(self, columns, min=0, max=1):
         """
         Independently scale the values in each provided column in the range (min, max)
         Columns is a list of column names
@@ -658,7 +663,8 @@ class BaseDfBench(object):
             self.df[column] = self.df[column] * (max - min) + min
         
         return self.df
-
+    '''
+    STESSA FUNZIONE DI FORMAT
     def round(self, columns, n):
         """
         Round the values in columns using n decimal places
@@ -669,7 +675,7 @@ class BaseDfBench(object):
         self.df[columns] = self.df[columns].round(n)
         
         return self.df
-
+    '''
     def get_duplicate_columns(self):
         """
         Return a list of duplicate columns, if exists.
@@ -678,7 +684,7 @@ class BaseDfBench(object):
         
         cols = self.df.columns.values
         
-        return [(cols[i], cols[j]) for i in range(0, len(cols)) for j in range(i+1, len(cols)) if self.df[cols[i]].equals(self.df[cols[j]])]
+        return [(cols[i], cols[j]) for i in range(0, len(cols)) for j in range(i+1, len(cols)) if (self.df[cols[i]].dtype == self.df[cols[j]].dtype and da.equal(self.df[cols[i]], self.df[cols[j]]).all().compute())]
 
     def to_csv(self, path, **kwargs):
         """
@@ -690,7 +696,7 @@ class BaseDfBench(object):
         self.df.to_csv(path, **kwargs)
 
         pass
-
+######################################################################
     def query(self, query):
         """
         Queries the dataframe and returns the corresponding
