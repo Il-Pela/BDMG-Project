@@ -9,11 +9,14 @@ import graphviz
 
 
 class BaseDfBench(object):
-    def __init__(self, file_path='/data/parquet'):
+    def __init__(self):
         cluster = LocalCUDACluster()
         client = Client(cluster)
         client.run(cudf.set_allocator, "managed")
-        self.df = dc.read_parquet(file_path, blocksize="256MB")
+        
+    def __getitem__(self, key):
+        return self.df[key]
+        
     
     def get_df(self):
         """
@@ -35,8 +38,8 @@ class BaseDfBench(object):
         # return in kB for backwards compatibility
         return psutil.Process().memory_info().rss / 1024
 
-    '''
-    def load_dataset(self, path, format, conn=None, **kwargs):
+    
+    def load_dataset(self, format, path='/data/parquet', conn=None, **kwargs):
         """
         Load the provided dataframe
         :param path: path of the file to load
@@ -54,12 +57,12 @@ class BaseDfBench(object):
         elif format == "excel":
             self.df = self.read_excel(path, **kwargs)
         elif format == "parquet":
-            self.df = self.read_parquet(path, **kwargs)
+            self.df = dc.read_parquet(path, blocksize="256MB")
         elif format == "sql":
             self.df = self.read_sql(path, conn, **kwargs)
 
         return self.df
-
+    '''
     def read_csv(self, path, **kwargs):
         """
         Read a csv file
@@ -108,12 +111,13 @@ class BaseDfBench(object):
         """
         pass
 
-    def read_parquet(self, path, **kwargs):
+    def read_parquet(self, file_path='/data/parquet', **kwargs):
         """
         Read a parquet file
         :param path: path of the file to load
         :param kwargs: extra arguments
         """
+        
         pass
 
     def read_sql(self, query, conn, **kwargs):
@@ -281,7 +285,7 @@ class BaseDfBench(object):
         :param dtypes a dictionary that provides for ech column to cast the new datatype
                For example  {'col_name': 'int8'}
         """
-
+        
         self.df = self.df.astype(dtypes)
 
         return self.df
@@ -623,6 +627,7 @@ class BaseDfBench(object):
                 self.substitute_by_pattern(col, to_replace, value)
         
         return self.df
+    '''
     #TOTEST TODO
     def edit(self, columns, func):
         """
@@ -632,7 +637,7 @@ class BaseDfBench(object):
         :param func function to apply
         """
         
-        self.df[columns] = self.df[columns].apply(func)
+        self.df[columns] = self.df[columns].apply(func, axis=1)
         
         return self.df
     #TOTEST TODO
@@ -647,7 +652,7 @@ class BaseDfBench(object):
         self.df.at[index, column] = value
         
         return self.df
-
+    '''
     def min_max_scaling(self, columns, min=0, max=1):
         """
         Independently scale the values in each provided column in the range (min, max)
@@ -696,12 +701,14 @@ class BaseDfBench(object):
         self.df.to_csv(path, **kwargs)
 
         pass
-######################################################################
+
     def query(self, query):
         """
+        NB. DATO CHE USIAMO UN cudf.DataFrame QUERY ACCETTA SOLO and, or COME OPERATORI BINARI E NON & E |
+        
         Queries the dataframe and returns the corresponding
         result set.
-        :param query: a string with the query conditions, e.g. "col1 > 1 & col2 < 10"
+        :param query: a string with the query conditions, e.g. "col1 > 1 and col2 < 10"
         :return: subset of the dataframe that correspond to the selection conditions
         """
         
