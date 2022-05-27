@@ -62,74 +62,7 @@ class BaseDfBench(object):
             self.df = self.read_sql(path, conn, **kwargs)
 
         return self.df
-    '''
-    def read_csv(self, path, **kwargs):
-        """
-        Read a csv file
-        :param path: path of the file to load
-        :param kwargs: extra arguments
-        """
 
-        self.df = cudf.read_csv(path, **kwargs)
-
-        return self.df
-
-    def read_json(self, path, **kwargs):
-        """
-        :param path: path of the file to load
-        :param kwargs: extra arguments
-        Read a json file
-        """
-
-        self.df = cudf.read_json(path, **kwargs)
-        pass
-
-    def read_xml(self, path, **kwargs):
-        """
-        Read a xml file
-        :param path: path of the file to load
-        :param kwargs: extra arguments
-        """
-        import xmltodict, json
-
-        with open(path) as xml_file:
-            data_dict = xmltodict.parse(xml_file.read())
-        
-        xml_file.close()
-
-        json_data = json.dumps(data_dict)
-
-        self.df = self.read_json(json_data)
-
-        return self.df
-
-    def read_excel(self, path, **kwargs):
-        """
-        Read an excel file
-        :param path: path of the file to load
-        :param kwargs: extra arguments
-        """
-        pass
-
-    def read_parquet(self, file_path='/data/parquet', **kwargs):
-        """
-        Read a parquet file
-        :param path: path of the file to load
-        :param kwargs: extra arguments
-        """
-        
-        pass
-
-    def read_sql(self, query, conn, **kwargs):
-        """
-        Given a connection and a query
-        creates a dataframe from the query output
-        :param query query to run to get the data
-        :param conn connection to a database
-        :param kwargs: extra arguments
-        """
-        pass
-    '''
     def sort(self, column, ascending=True):
         """
         Sort the dataframe by the provided column
