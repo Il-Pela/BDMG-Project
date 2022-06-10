@@ -3,14 +3,21 @@ import dask_cudf as dc
 import dask.dataframe as dd
 import dask.array as da
 from dask_cuda import LocalCUDACluster
-from dask.distributed import Client
+from dask.distributed import Client, LocalCluster
 import cudf
-import graphviz
+#import graphviz
 
 
 class BaseDfBench(object):
-    def __init__(self):
-        cluster = LocalCUDACluster()
+    def __init__(self, type_of_istance="DASK_CUDF"):
+        self.type_of_istance = type_of_istance
+        if type_of_istance == "DASK_CUDF":
+            cluster = LocalCUDACluster()
+        elif type_of_istance == "DASK":
+            cluster = LocalCluster()
+        else:
+            print("Wrong Type of istance, i'm loading DASK...")
+            cluster = LocalClient()    
         client = Client(cluster)
         client.run(cudf.set_allocator, "managed")
         
@@ -57,7 +64,10 @@ class BaseDfBench(object):
         elif format == "excel":
             self.df = self.read_excel(path, **kwargs)
         elif format == "parquet":
-            self.df = dc.read_parquet(path, blocksize="256MB")
+            if self.type_of_istance == "DASK_CUDF":
+                self.df = dc.read_parquet(path, blocksize="256MB")
+            elif self.type_of_istance == "DASK":
+                self.df = dd.read_parquet(path, blocksize="256MB")
         elif format == "sql":
             self.df = self.read_sql(path, conn, **kwargs)
 
@@ -199,9 +209,10 @@ class BaseDfBench(object):
         """
         q_low = self.df[column].quantile(lower_quantile)
         q_hi  = self.df[column].quantile(upper_quantile)
+        # print(q_low, q_hi)
 
-        return self.df[(self.df[column] < q_low) | (self.df[column] > q_hi)]
-
+        return self.df[column][self.df[column].lt(q_low) | self.df[column].gt(q_hi)]
+    
     def get_columns_types(self):
         """
         Returns a dictionary with column types
