@@ -23,6 +23,10 @@ class BaseDfBench(object):
         
     def __getitem__(self, key):
         return self.df[key]
+    
+    def __setitem__(self, key, newval):
+        self.df[key] = newval
+        return 
         
     
     def get_df(self):
