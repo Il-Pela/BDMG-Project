@@ -649,6 +649,17 @@ class BaseDfBench(object):
         self.df.to_csv(path, **kwargs)
 
         pass
+    
+    def to_parquet(self, path, **kwargs):
+        """
+        Export the dataframe in a parquet file.
+        :param path path on which store the parquet
+        :param kwargs extra parameters
+        """
+        
+        self.df.to_parquet(path, **kwargs)
+
+        pass
 
     def query(self, query):
         """
