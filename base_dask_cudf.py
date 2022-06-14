@@ -4,6 +4,7 @@ import dask.dataframe as dd
 import dask.array as da
 from dask_cuda import LocalCUDACluster
 from dask.distributed import Client, LocalCluster
+import numpy as np
 import cudf
 #import graphviz
 
@@ -427,7 +428,7 @@ class BaseDfBench(object):
         
         return self.df[column].str.split(sep, splits, expand=True)
 
-    def strip(self, columns, chars):
+    def strip(self, columns, chars=None):
         """
         Remove the characters appearing in chars at the beginning/end of the provided columns
         Columns is a list of column names
@@ -672,3 +673,34 @@ class BaseDfBench(object):
         """
         
         return self.df.query(query)
+    
+    def col_type(self, find=['numeric']):
+        """
+        Return a list containing all columns of the specified type
+        df : dataframe
+        type : list or single value with the specified value/s
+        """
+        tipo = []
+        if type(find) == list:
+            tipo.extend(find)
+        else:
+            tipo.append(find)
+
+        col = set() #no duplicate column name
+
+        for i in tipo:
+            if i == 'numeric':
+                col.update(self.df.select_dtypes(include=np.number).columns)
+            elif i == 'float':
+                col.update(self.df.select_dtypes(include=float).columns)
+            elif i == 'int':
+                col.update(self.df.select_dtypes(include=int).columns)
+            elif i == 'date':
+                col.update(self.df.select_dtypes(include=np.datetime64).columns)
+            elif i == 'string':
+                cols = self.get_columns_types()
+                for k,v in cols.items():
+                    if v == 'string' or v == 'object':
+                        col.update([k])
+
+        return list(col)
