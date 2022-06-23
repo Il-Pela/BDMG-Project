@@ -389,10 +389,7 @@ class BaseDfBench(object):
         :param aggfunc dictionary to aggregate ("sum", "mean", "count") the values for each column
                {"col1": "sum"}
         """
-        
-        self.df = self.df.pivot(index=index, values=values, columns=columns, aggfunc=aggfunc).reset_index()
-        
-        return self.df
+        return self.df.pivot_table(index=index, values=values, columns=columns, aggfunc=aggfunc)
 
     #FIXME ANCHE QUESTA VA CONTROLLATA
     def unpivot(self, columns, var_name, val_name):
