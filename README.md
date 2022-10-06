@@ -2,7 +2,7 @@
 In this project we Prepared and Analyzed a dataset about Italian's bills. <br />
 The dataset contained about 14 Millions of rows and every group choosed a library in a give list in order to do the work. <br />We selected [Rapids](https://rapids.ai/) (cuDf)
 but, due to the dataset dimensions, we decided to change and use Dask-cuDf, a distributed version of Rapids. <br />
-For more info: [project's slides]()
+For more info: [project's slides](Presentation.pdf)
 ### Contributors 
 [Francesco Pelacani](https://github.com/Il-Pela) <br />
 [Giulio Querzoli](https://github.com/Giurzo) <br />
